@@ -405,6 +405,28 @@
       ],
       "Hash": "d59f3b464e8da1aef82dc04b588b8dfb"
     },
+    "eyetrackingR": {
+      "Package": "eyetrackingR",
+      "Version": "0.1.8",
+      "Source": "GitHub",
+      "RemoteType": "github",
+      "RemoteHost": "api.github.com",
+      "RemoteRepo": "eyetrackingR",
+      "RemoteUsername": "jwdink",
+      "RemoteRef": "HEAD",
+      "RemoteSha": "de7e8efda3d4d81e32de2d2a44268ba96cf6947a",
+      "Requirements": [
+        "R",
+        "broom",
+        "dplyr",
+        "ggplot2",
+        "lazyeval",
+        "purrr",
+        "tidyr",
+        "zoo"
+      ],
+      "Hash": "32a221b033f21e0de52351f87cb6738c"
+    },
     "fansi": {
       "Package": "fansi",
       "Version": "1.0.4",
@@ -792,6 +814,16 @@
         "utils"
       ],
       "Hash": "0b8a6d63c8770f02a8b5635f3c431e6b"
+    },
+    "lazyeval": {
+      "Package": "lazyeval",
+      "Version": "0.2.2",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R"
+      ],
+      "Hash": "d908914ae53b04d4c0c0fd72ecc35370"
     },
     "lifecycle": {
       "Package": "lifecycle",
@@ -1532,6 +1564,21 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "0d0056cc5383fbc240ccd0cb584bf436"
+    },
+    "zoo": {
+      "Package": "zoo",
+      "Version": "1.8-12",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R",
+        "grDevices",
+        "graphics",
+        "lattice",
+        "stats",
+        "utils"
+      ],
+      "Hash": "5c715954112b45499fb1dadc6ee6ee3e"
     }
   }
 }

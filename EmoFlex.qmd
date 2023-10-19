@@ -11,6 +11,7 @@ library(here)
 library(tidyverse)
 library(data.table)
 library(hdf5r)
+library(eyetrackingR)
 ```
 
 # Read hdf5 and write output
@@ -19,107 +20,125 @@ library(hdf5r)
 hdf_path=here("raw","hdf")
 out_path=here("data")
 
-tobii.extractor = function(hdf5FilesPath, extract = 'all', saveRdata = FALSE) {
-    source('getpk.R', local = TRUE) # auto install and load packages
-    getpk(c('hdf5r'))
+tobii.extractor = function(hdf5FilesPath, extract = 'trials', saveRdata = FALSE) {
+  source('getpk.R', local = TRUE) # auto install and load packages
+  getpk(c('hdf5r'))
     
-    hdfFilesList = Sys.glob(file.path(hdf5FilesPath,"*_EmoFlex_EEG_*.hdf5"))
+  hdfFilesList = Sys.glob(file.path(hdf5FilesPath,"*_EmoFlex_EEG_*.hdf5"))
     
-    if (length(hdfFilesList) == 0){
-      return(message('No HDF5 files found in the directory provided.'))
+  if (length(hdfFilesList) == 0){
+    return(message('No HDF5 files found in the directory provided.'))
+  }
+  
+  # Progress
+  pb = txtProgressBar(min = 0, max = length(hdfFilesList), initial = 0, style = 3) 
+  
+  for (f in 1:length(hdfFilesList)) {
+    df = H5File$new(hdfFilesList[f], mode="r")
+    # import eyetracker events
+    et = df[["data_collection/events/eyetracker/BinocularEyeSampleEvent"]]
+    et = et[] 
+    # import experiment evnts
+    ex = df[["data_collection/events/experiment/MessageEvent"]]
+    ex = ex[]
+    
+    # Get subject id from Events
+    ssid = sapply(strsplit(basename(hdfFilesList[f]), split = "_"), "[", 1)
+    
+    # add leading 0 to ssid if 1:9
+    if (nchar(ssid) == 1) {
+      ssid = paste('0', ssid, sep = '')
     }
     
-    # Progress
-    pb = txtProgressBar(min = 0, max = length(hdfFilesList), initial = 0, style = 3) 
+    # Prepare Events, keep only start/end messages
+    ex = subset(ex, grepl("start|end", ex$text))
     
-    for (f in 1:length(hdfFilesList)) {
-        
-        df = H5File$new(hdfFilesList[f], mode="r")
-        # import eyetracker events
-        et = df[["data_collection/events/eyetracker/BinocularEyeSampleEvent"]]
-        et = et[] 
-        # import experiment evnts
-        ex = df[["data_collection/events/experiment/MessageEvent"]]
-        ex = ex[]
-        
-        # Get subject id from Events
-        ssid = sapply(strsplit(basename(hdfFilesList[f]), split = "_"), "[", 1)
-        
-        # add leading 0 to ssid if 1:9
-        if (nchar(ssid) == 1){
-            ssid = paste('0', ssid, sep = '')
-        }
-        
-        # Prepare Events, keep only start/end messages
-        ex = subset(ex, grepl("start|end", ex$text))
-        
-        # Create start/end references
-        ex$start = NA
-        ex$end = NA
-        ex$dur = NA
+    # Create start/end references
+    ex$start = NA
+    ex$end = NA
+    ex$dur = NA
+  
+    # Trial number extraction 
+    et$trial = NA
+    et$condition = NA
+  
+    # Space for subject id
+    et$ssID = NA
       
-        # Trial number extraction 
-        et$trial = NA
-        et$condition = NA
-        et$start = NA
-        et$end = NA
-      
-        # Space for subject id
-        et$ssID = NA
-        
-        # Get start, end, and duration times in event df (ex)
-        for (l in 1:nrow(ex)) {
-          if ((grepl('start', ex$text[l])) == TRUE) {
-            ex$start[l] = ex$time[l]
-            if ((grepl('end', ex$text[l+1])) == TRUE){
-              ex$end[l] = ex$time[l+1]
-              } else {
-                message(sprintf('trial start/end structure not valid: %s', file))
-              }
-            }
-          ex$dur[l] = ex$end[l] - ex$start[l]
+    # Get start, end, and duration times in event df (ex)
+    for (l in 1:nrow(ex)) {
+      if ((grepl('start', ex$text[l])) == TRUE) {
+        ex$start[l] = ex$time[l]
+        if ((grepl('end', ex$text[l+1])) == TRUE){
+          ex$end[l] = ex$time[l+1]
+          } else {
+            message(sprintf('trial start/end structure not valid: %s', file))
           }
-        
-        # Remove all 'trial end' messages
-        ex = subset(ex, grepl('start',ex$text))     
-        
-        # Extract condition from event message
-        ex$condition = sapply(strsplit(ex$text, split = "_"), "[", 4)
-        ex$condition = sapply(strsplit(ex$condition, split = "-"), "[", 2)
-        
-        # Extract trial number from event message
-        ex$trial = sapply(strsplit(ex$text, split = "_"), "[", 2)
-        ex$trial = sapply(strsplit(ex$trial, split = "-"), "[", 2)
-       
-        # Get times from event df into et
-        for(i in 1:nrow(ex)) {
-          filt = et$time >= ex$start[i] & et$time <= ex$end[i]
-          et$trial[filt] = ex$trial[i]
-          et$condition[filt] = ex$condition[i]
-          et$ssID[filt] = ssid
         }
-        
-        if (extract == 'all'){
-            # nothing to do
-        } else if (extract == 'trials'){
-            et = subset(et, is.na(et$trial) == FALSE)
-        }
-        
-        if (saveRdata == TRUE){
-            assign(sprintf("%s_tobiiData", ssid), et, envir = .GlobalEnv)
-            assign(sprintf("%s_eventsData", ssid), ex, envir = .GlobalEnv)
-        }
-        
-        # Save file
-        write.csv(et, file = sprintf("%s/%s_eyetrackingData.csv", out_path, ssid), 
-                  row.names = FALSE)
-        write.csv(ex, file = sprintf("%s/%s_eventsData.csv", out_path, ssid), 
-                  row.names = FALSE)
-        
-        # Progress
-        setTxtProgressBar(pb,f)
-    }
-}
+      ex$dur[l] = ex$end[l] - ex$start[l]
+      }
+      
+      # Remove all 'trial end' messages
+      ex = subset(ex, grepl('start',ex$text))     
+      
+      # Extract condition from event message
+      ex$condition = sapply(strsplit(ex$text, split = "_"), "[", 4)
+      ex$condition = sapply(strsplit(ex$condition, split = "-"), "[", 2)
+      
+      # Extract trial number from event message
+      ex$trial = sapply(strsplit(ex$text, split = "_"), "[", 2)
+      ex$trial = sapply(strsplit(ex$trial, split = "-"), "[", 2)
+     
+      # Get times from event df into et
+      for(i in 1:nrow(ex)) {
+        filt = et$time >= ex$start[i] & et$time <= ex$end[i]
+        et$start[filt] = ex$start[i]
+        et$end[filt] = ex$end[i]
+        et$trial[filt] = ex$trial[i]
+        et$condition[filt] = ex$condition[i]
+        et$ssID[filt] = ssid
+      }
+      
+      if (extract == 'all'){
+        # nothing to do
+      } else if (extract == 'trials'){
+        et = subset(et, is.na(et$trial) == FALSE)
+      }
+      
+      if (saveRdata == TRUE) {
+        assign(sprintf("%s_tobiiData", ssid), et, envir = .GlobalEnv)
+        assign(sprintf("%s_eventsData", ssid), ex, envir = .GlobalEnv)
+      }
+      
+      # Save file
+      write.csv(et, file = sprintf("%s/%s_eyetrackingData.csv", out_path, ssid), 
+                row.names = FALSE)
+      write.csv(ex, file = sprintf("%s/%s_eventsData.csv", out_path, ssid), 
+                row.names = FALSE)
+      
+      # Progress
+      setTxtProgressBar(pb,f)
+      }
+  }
 
 tobii.extractor(hdf5FilesPath = hdf_path)
+```
+
+```{r}
+eyetracking_files <- Sys.glob(file.path(out_path,"*_eyetrackingData.csv"))
+for (file in 1:length(eyetracking_files)) {
+  et <- read_csv(file, show_col_types = FALSE)
+  et <- et %>% 
+      select("ssID", "event_id", "trial", "left_gaze_x", "left_gaze_y", 
+             "right_gaze_x", "right_gaze_y", "left_pupil_measure1", "right_pupil_measure1", 
+             "status", "condition", "time")
+  # Trackloss as true/false
+  # 0:  both 
+  # 2:  no right eye
+  # 20: no left eye
+  # 22: trackloss
+  et <- et %>% 
+    mutate(TrackLoss = ifelse(status == 22, TRUE, FALSE))
+  full_raw_et <- rbind.data.frame(full_raw_et, et)
+}
 ```
